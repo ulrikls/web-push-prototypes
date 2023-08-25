@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Server-sent events</title>
+</head>
+<body>
+<h1>Server-sent events</h1>
+<div id="messages"></div>
+<script>
+let id = id => document.getElementById(id);
+let evtSource = new EventSource("http://localhost:7070/sse");
+
+evtSource.onmessage = msg => update(msg);
+
+function update(msg) {
+    id("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
+}
+</script>
+</body>
+</html>

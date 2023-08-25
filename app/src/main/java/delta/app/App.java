@@ -19,6 +19,7 @@ public class App {
         Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
 
         var app = Javalin.create();
+        app.before(ctx -> ctx.header("Access-Control-Allow-Origin", "*"));
 
         // Server-sent events
         app.sse("/sse", sseClient -> {
