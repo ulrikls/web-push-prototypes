@@ -5,6 +5,7 @@ package delta.app;
 
 import io.javalin.Javalin;
 import io.javalin.http.sse.SseClient;
+import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
 
 import java.util.Queue;
@@ -24,9 +25,9 @@ public class App {
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
 
     public App() {
-        app = Javalin.create();
-        app.before(ctx -> ctx.header("Access-Control-Allow-Origin", "*"));
+        app = Javalin.create(config -> config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost)));
 
+        configureReturn();
         configureServerSentEvents();
         configureWebsocket();
     }
@@ -35,6 +36,14 @@ public class App {
         app.start(7070);
 
         Executors.newScheduledThreadPool(1).scheduleAtFixedRate(this::sendMessage, 0L, 1L, TimeUnit.SECONDS);
+    }
+
+    private void configureReturn() {
+        app.post("/return", ctx -> {
+            var currentTime = System.nanoTime();
+            var record = ctx.bodyAsClass(ReturnRecord.class);
+            System.out.println(record.protocol() + ";" + (currentTime - record.nanoTime()));
+        });
     }
 
     private void configureServerSentEvents() {

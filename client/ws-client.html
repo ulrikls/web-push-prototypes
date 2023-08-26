@@ -13,6 +13,16 @@ ws.onmessage = msg => update(msg);
 ws.onclose = () => alert("WebSocket connection closed");
 
 function update(msg) {
+    fetch("http://localhost:7070/return", {
+        method: "POST",
+        body: JSON.stringify({
+            protocol: "WS",
+            nanoTime: msg.data
+        }),
+        headers: {
+            "Content-type": "application/json"
+        }
+    });
     document.getElementById("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
 }
 </script>
