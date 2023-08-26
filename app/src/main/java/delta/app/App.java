@@ -7,39 +7,53 @@ import io.javalin.Javalin;
 import io.javalin.http.sse.SseClient;
 import io.javalin.websocket.WsContext;
 
-import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class App {
-    public static void main(String[] args) {
-        Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
-        Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
 
-        var app = Javalin.create();
+    public static void main(String[] args) {
+        new App().start();
+    }
+
+    private final Javalin app;
+
+    private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
+    private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
+
+    public App() {
+        app = Javalin.create();
         app.before(ctx -> ctx.header("Access-Control-Allow-Origin", "*"));
 
-        // Server-sent events
-        app.sse("/sse", sseClient -> {
-           sseClient.keepAlive();
-           sseClient.onClose(() -> sseClients.remove(sseClient));
-           sseClients.add(sseClient);
-        });
+        configureServerSentEvents();
+        configureWebsocket();
+    }
 
-        // WebSocket
+    public void start() {
+        app.start(7070);
+
+        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(this::sendMessage, 0L, 1L, TimeUnit.SECONDS);
+    }
+
+    private void configureServerSentEvents() {
+        app.sse("/sse", sseClient -> {
+            sseClient.keepAlive();
+            sseClient.onClose(() -> sseClients.remove(sseClient));
+            sseClients.add(sseClient);
+        });
+    }
+
+    private void configureWebsocket() {
         app.ws("/ws", ws -> {
             ws.onConnect(wsClients::add);
             ws.onClose(wsClients::remove);
         });
+    }
 
-        app.start(7070);
-
-        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
-            System.out.println(sseClients.size() + " SSE clients, " + wsClients.size() + " WS clients");
-            sseClients.forEach(sseClient -> sseClient.sendEvent(Instant.now().getNano()));
-            wsClients.forEach(wsClient -> wsClient.send(Instant.now().getNano()));
-        }, 0L, 500L, TimeUnit.MILLISECONDS);
+    private void sendMessage() {
+        sseClients.forEach(sseClient -> sseClient.sendEvent(System.nanoTime()));
+        wsClients.forEach(wsClient -> wsClient.send(System.nanoTime()));
     }
 }

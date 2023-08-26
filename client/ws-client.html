@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>WebSockets</title>
@@ -8,16 +8,12 @@
 <h1>WebSocket</h1>
 <div id="messages"></div>
 <script>
-// small helper function for selecting element by id
-let id = id => document.getElementById(id);
-
-// Establish the WebSocket connection and set up event handlers
 let ws = new WebSocket("ws://localhost:7070/ws");
 ws.onmessage = msg => update(msg);
 ws.onclose = () => alert("WebSocket connection closed");
 
 function update(msg) {
-    id("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
+    document.getElementById("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
 }
 </script>
 </body>
