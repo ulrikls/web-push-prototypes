@@ -9,6 +9,7 @@ import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
 
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,7 @@ public class App {
 
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
+    private final Queue<CompletableFuture<Long>> lpClients = new ConcurrentLinkedQueue<>();
 
     public App() {
         app = Javalin.create(config -> config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost)));
@@ -30,6 +32,7 @@ public class App {
         configureReturn();
         configureServerSentEvents();
         configureWebsocket();
+        configureLongPolling();
     }
 
     public void start() {
@@ -61,8 +64,22 @@ public class App {
         });
     }
 
+    private void configureLongPolling() {
+        app.get("/lp", ctx -> {
+            CompletableFuture<Long> lpFuture = new CompletableFuture<>();
+            lpClients.add(lpFuture);
+            ctx.future(() -> lpFuture.thenAccept(response -> ctx.result(String.valueOf(response))));
+        });
+    }
+
     private void sendMessage() {
         sseClients.forEach(sseClient -> sseClient.sendEvent(System.nanoTime()));
+
         wsClients.forEach(wsClient -> wsClient.send(System.nanoTime()));
+
+        CompletableFuture<Long> lpFuture;
+        while ((lpFuture = lpClients.poll()) != null) {
+            lpFuture.complete(System.nanoTime());
+        }
     }
 }
