@@ -8,11 +8,15 @@ import io.javalin.http.sse.SseClient;
 import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 public class App {
 
@@ -20,11 +24,18 @@ public class App {
         new App().start();
     }
 
+    private final String CSV_FILE_NAME = "LogReply.csv";
+
     private final Javalin app;
+
+    private int noOfMessages = 0;
 
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
     private final Queue<CompletableFuture<Long>> lpClients = new ConcurrentLinkedQueue<>();
+
+    private final Queue<ReturnRecord> logReply = new ConcurrentLinkedQueue<>();
+
 
     public App() {
         app = Javalin.create(config -> config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost)));
@@ -45,7 +56,11 @@ public class App {
         app.post("/return", ctx -> {
             var currentTime = System.nanoTime();
             var record = ctx.bodyAsClass(ReturnRecord.class);
-            System.out.println(record.protocol() + ";" + (currentTime - record.nanoTime()));
+            var deltaTime = currentTime - record.nanoTime();
+
+            logReply.add(new ReturnRecord(record.protocol(),deltaTime  ));
+
+            System.out.println(record.protocol() + ";" + (currentTime - record.nanoTime()) + "no of replies: " + logReply.size());
         });
     }
 
@@ -72,7 +87,15 @@ public class App {
         });
     }
 
+
     private void sendMessage() {
+        //test
+        if(  20 < noOfMessages++  )
+            return;
+
+        if( noOfMessages == 20 )
+            writeLogReplyToCSV();
+
         sseClients.forEach(sseClient -> sseClient.sendEvent(System.nanoTime()));
 
         wsClients.forEach(wsClient -> wsClient.send(System.nanoTime()));
@@ -82,4 +105,24 @@ public class App {
             lpFuture.complete(System.nanoTime());
         }
     }
+
+
+    private void writeLogReplyToCSV()  {
+        File csvOutputFile = new File(CSV_FILE_NAME);
+        try (PrintWriter pw = new PrintWriter(csvOutputFile)) {
+            logReply.stream()
+                    .map(this::convertRecToLine)
+                    .forEach(pw::println);
+        } catch (FileNotFoundException e) {
+            System.out.println("File no found: " + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String convertRecToLine(ReturnRecord qData) {
+        return qData.protocol() + ";" + qData.nanoTime();
+
+
+    }
+
 }
