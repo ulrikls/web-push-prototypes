@@ -7,6 +7,8 @@ import io.javalin.Javalin;
 import io.javalin.http.sse.SseClient;
 import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
+import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.http.HttpHeaderValue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -80,6 +82,7 @@ public class App {
 
     private void configureLongPolling() {
         app.post("/lp", ctx -> {
+            ctx.header(HttpHeader.CACHE_CONTROL.toString(), HttpHeaderValue.NO_CACHE.toString());
             CompletableFuture<Long> lpFuture = new CompletableFuture<>();
             lpClients.add(lpFuture);
             ctx.future(() -> lpFuture.thenAccept(response -> ctx.result(String.valueOf(response))));
