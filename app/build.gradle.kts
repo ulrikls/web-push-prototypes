@@ -11,6 +11,7 @@ plugins {
 dependencies {
     implementation("io.javalin:javalin")
     implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     runtimeOnly("org.slf4j:slf4j-simple")
 }

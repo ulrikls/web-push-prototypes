@@ -21,6 +21,7 @@ function update(response) {
     fetch("http://localhost:7070/return", {
         method: "POST",
         body: JSON.stringify({
+            time: new Date().toISOString(),
             protocol: "LP",
             nanoTime: response
         }),

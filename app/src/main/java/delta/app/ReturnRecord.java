@@ -1,4 +1,6 @@
 package delta.app;
 
-public record ReturnRecord(String protocol, Long nanoTime) {
+import java.time.Instant;
+
+public record ReturnRecord(Instant time, String protocol, Long nanoTime) {
 }

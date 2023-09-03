@@ -16,6 +16,7 @@ function update(msg) {
     fetch("http://localhost:7070/return", {
         method: "POST",
         body: JSON.stringify({
+            time: new Date().toISOString(),
             protocol: "WS",
             nanoTime: msg.data
         }),

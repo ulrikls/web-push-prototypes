@@ -57,6 +57,7 @@ public class App {
             var record = ctx.bodyAsClass(ReturnRecord.class);
 
             logReplies.add(new ReturnRecord(
+                    record.time(),
                     record.protocol(),
                     currentTime - record.nanoTime()));
         });
@@ -99,7 +100,7 @@ public class App {
 
 
     private void writeLogReplyToCSV() {
-        try (var writer = Files.newBufferedWriter(CSV_FILE, StandardOpenOption.APPEND)) {
+        try (var writer = Files.newBufferedWriter(CSV_FILE, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
             ReturnRecord logReply;
             while ((logReply = logReplies.poll()) != null) {
                 writer.write(convertRecToLine(logReply));
@@ -110,7 +111,11 @@ public class App {
     }
 
     private String convertRecToLine(ReturnRecord logReply) {
-        return logReply.protocol() + ";" + logReply.nanoTime() + System.lineSeparator();
+        return String.join(";",
+                logReply.time().toString(),
+                logReply.protocol(),
+                logReply.nanoTime().toString()
+        ) + System.lineSeparator();
     }
 
 }
