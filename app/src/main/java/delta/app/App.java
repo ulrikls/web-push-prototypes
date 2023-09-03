@@ -79,7 +79,7 @@ public class App {
     }
 
     private void configureLongPolling() {
-        app.get("/lp", ctx -> {
+        app.post("/lp", ctx -> {
             CompletableFuture<Long> lpFuture = new CompletableFuture<>();
             lpClients.add(lpFuture);
             ctx.future(() -> lpFuture.thenAccept(response -> ctx.result(String.valueOf(response))));
