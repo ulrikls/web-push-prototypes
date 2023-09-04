@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>WebSockets</title>
+    <title>Server-sent events</title>
 </head>
 <body>
-<h1>WebSocket</h1>
+<h1>Server-sent events</h1>
+<p><a href="/">Home</a></p>
 <div id="messages"></div>
 <script>
-let ws = new WebSocket("ws://localhost:7070/ws");
-ws.onmessage = msg => update(msg);
-ws.onclose = () => alert("WebSocket connection closed");
+let evtSource = new EventSource("/sse");
+evtSource.onmessage = msg => update(msg);
 
 function update(msg) {
-    fetch("http://localhost:7070/return", {
+    fetch("/return", {
         method: "POST",
         body: JSON.stringify({
             time: new Date().toISOString(),
-            protocol: "WS",
+            protocol: "SSE",
             nanoTime: msg.data
         }),
         headers: {

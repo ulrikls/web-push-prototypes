@@ -38,7 +38,10 @@ public class App {
 
 
     public App() {
-        app = Javalin.create(config -> config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost)));
+        app = Javalin.create(config -> {
+            config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
+            config.staticFiles.add("/clients");
+        });
 
         configureReturn();
         configureServerSentEvents();
