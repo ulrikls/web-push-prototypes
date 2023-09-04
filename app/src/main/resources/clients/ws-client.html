@@ -9,9 +9,11 @@
 <p><a href="/">Home</a></p>
 <div id="messages"></div>
 <script>
-let ws = new WebSocket("ws://" + window.location.host + "/ws");
-ws.onmessage = msg => update(msg);
-ws.onclose = () => alert("WebSocket connection closed");
+function open() {
+    let ws = new WebSocket("ws://" + window.location.host + "/ws");
+    ws.onmessage = msg => update(msg);
+    ws.onclose = () => window.setTimeout(open, 1000);
+}
 
 function update(msg) {
     fetch("/return", {
@@ -27,6 +29,8 @@ function update(msg) {
     });
     document.getElementById("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
 }
+
+open();
 </script>
 </body>
 </html>
