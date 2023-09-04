@@ -20,3 +20,20 @@ application {
     // Define the main class for the application.
     mainClass.set("delta.app.App")
 }
+
+tasks.jar {
+    dependsOn(configurations.runtimeClasspath)
+
+    from(project.layout.projectDirectory.file("../LICENSE")) {
+        into("META-INF")
+    }
+    from(configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }) {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+
+    manifest {
+        attributes("Main-Class" to "delta.app.App")
+    }
+}
+
+tasks.distTar { enabled = false }
