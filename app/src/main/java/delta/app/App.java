@@ -15,10 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class App {
 
@@ -29,6 +26,7 @@ public class App {
     private static final Path CSV_FILE = Path.of("LogReply.csv");
 
     private final Javalin app;
+    private final ExecutorService executor = Executors.newWorkStealingPool();
 
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
@@ -94,9 +92,9 @@ public class App {
 
 
     private void sendMessage() {
-        sseClients.forEach(sseClient -> sseClient.sendEvent(System.nanoTime()));
+        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(System.nanoTime())));
 
-        wsClients.forEach(wsClient -> wsClient.send(System.nanoTime()));
+        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(System.nanoTime())));
 
         CompletableFuture<Long> lpFuture;
         while ((lpFuture = lpClients.poll()) != null) {
