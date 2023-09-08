@@ -13,8 +13,8 @@ function poll() {
     fetch("/lp", { method: "POST" })
         .then((response) => response.text())
         .then((response) => {
-            update(response);
             poll();
+            update(response);
         })
         .catch((error) => {
             window.setTimeout(poll, 1000);
