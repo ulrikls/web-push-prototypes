@@ -3,24 +3,30 @@
  */
 package delta.app;
 
-import com.fasterxml.jackson.databind.SerializationFeature;
 import io.javalin.Javalin;
 import io.javalin.http.sse.SseClient;
 import io.javalin.json.JavalinJackson;
 import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
-import org.eclipse.jetty.http.HttpHeader;
-import org.eclipse.jetty.http.HttpHeaderValue;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Queue;
 import java.util.Random;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.eclipse.jetty.http.HttpHeader.CACHE_CONTROL;
+import static org.eclipse.jetty.http.HttpHeaderValue.NO_CACHE;
 
 public class App {
 
@@ -28,8 +34,6 @@ public class App {
         int payloadLength = (args.length > 0) ? Integer.parseInt(args[0]) : 0;
         new App(payloadLength).start();
     }
-
-    private static final Path CSV_FILE = Path.of("LogReply.csv");
 
     private final Javalin app;
     private final ExecutorService executor = Executors.newWorkStealingPool();
@@ -40,17 +44,19 @@ public class App {
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
+    private final Path csvFile;
     private final String payload;
 
 
     public App(int payloadLength) {
+        csvFile = Path.of("LogReply-" + Instant.now() + "-" + payloadLength + ".csv");
         payload = randomPayload(payloadLength);
 
         app = Javalin.create(config -> {
             config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
             config.staticFiles.add("/clients");
             config.jsonMapper(new JavalinJackson().updateMapper(
-                    mapper -> mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)));
+                    mapper -> mapper.configure(WRITE_DATES_AS_TIMESTAMPS, false)));
         });
 
         configureReturn();
@@ -62,14 +68,14 @@ public class App {
     private static String randomPayload(int payloadLength) {
         var bytes = new byte[payloadLength];
         new Random().nextBytes(bytes);
-        return new String(bytes, StandardCharsets.UTF_8);
+        return new String(bytes, UTF_8);
     }
 
     public void start() {
         app.start(7070);
 
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendMessage, 0L, 1L, TimeUnit.SECONDS);
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::writeLogReplyToCSV, 10L, 30L, TimeUnit.SECONDS);
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendMessage, 0L, 1L, SECONDS);
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::writeLogReplyToCSV, 10L, 30L, SECONDS);
     }
 
     private void configureReturn() {
@@ -101,7 +107,7 @@ public class App {
 
     private void configureLongPolling() {
         app.post("/lp", ctx -> {
-            ctx.header(HttpHeader.CACHE_CONTROL.toString(), HttpHeaderValue.NO_CACHE.toString());
+            ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
             CompletableFuture<Message> lpFuture = new CompletableFuture<>();
             lpClients.add(lpFuture);
             ctx.future(() -> lpFuture.thenAccept(ctx::json));
@@ -129,13 +135,13 @@ public class App {
 
 
     private void writeLogReplyToCSV() {
-        try (var writer = Files.newBufferedWriter(CSV_FILE, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
+        try (var writer = Files.newBufferedWriter(csvFile, UTF_8, CREATE, APPEND)) {
             ReturnRecord logReply;
             while ((logReply = logReplies.poll()) != null) {
                 writer.write(convertRecToLine(logReply));
             }
         } catch (IOException e) {
-            throw new RuntimeException("Error writing latency to CSV file " + CSV_FILE, e);
+            throw new RuntimeException("Error writing latency to CSV file " + csvFile, e);
         }
     }
 

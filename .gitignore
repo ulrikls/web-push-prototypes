@@ -31,4 +31,4 @@ build
 
 .idea
 
-/LogReply.csv
+/LogReply*.csv
