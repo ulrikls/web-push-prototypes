@@ -13,17 +13,20 @@ import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.http.HttpHeaderValue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.*;
 
 public class App {
 
     public static void main(String[] args) {
-        new App().start();
+        int payloadLength = (args.length > 0) ? Integer.parseInt(args[0]) : 0;
+        new App(payloadLength).start();
     }
 
     private static final Path CSV_FILE = Path.of("LogReply.csv");
@@ -37,20 +40,29 @@ public class App {
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
+    private final String payload;
 
-    public App() {
+
+    public App(int payloadLength) {
+        payload = randomPayload(payloadLength);
+
         app = Javalin.create(config -> {
             config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
             config.staticFiles.add("/clients");
-            config.jsonMapper(new JavalinJackson().updateMapper(mapper -> {
-                mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
-            }));
+            config.jsonMapper(new JavalinJackson().updateMapper(
+                    mapper -> mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false)));
         });
 
         configureReturn();
         configureServerSentEvents();
         configureWebsocket();
         configureLongPolling();
+    }
+
+    private static String randomPayload(int payloadLength) {
+        var bytes = new byte[payloadLength];
+        new Random().nextBytes(bytes);
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     public void start() {
@@ -111,7 +123,8 @@ public class App {
     private Message createMessage() {
         return new Message(
                 Instant.now(),
-                System.nanoTime());
+                System.nanoTime(),
+                payload);
     }
 
 
