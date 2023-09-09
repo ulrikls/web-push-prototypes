@@ -22,18 +22,19 @@ function poll() {
 }
 
 function update(response) {
+    let message = JSON.parse(response)
     fetch("/return", {
         method: "POST",
         body: JSON.stringify({
-            time: new Date().toISOString(),
+            timestamp: message.timestamp,
             protocol: "LP",
-            nanoTime: response
+            nanoTime: message.nanoTime,
         }),
         headers: {
             "Content-type": "application/json"
         }
     });
-    document.getElementById("messages").insertAdjacentHTML("afterbegin", response + "<br/>");
+    document.getElementById("messages").insertAdjacentHTML("afterbegin", message.timestamp + "<br/>");
 }
 
 poll();

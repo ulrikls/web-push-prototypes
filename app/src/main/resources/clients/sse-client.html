@@ -13,18 +13,19 @@ let evtSource = new EventSource("/sse");
 evtSource.onmessage = msg => update(msg);
 
 function update(msg) {
+    let message = JSON.parse(msg.data)
     fetch("/return", {
         method: "POST",
         body: JSON.stringify({
-            time: new Date().toISOString(),
+            timestamp: message.timestamp,
             protocol: "SSE",
-            nanoTime: msg.data
+            nanoTime: message.nanoTime,
         }),
         headers: {
             "Content-type": "application/json"
         }
     });
-    document.getElementById("messages").insertAdjacentHTML("afterbegin", msg.data + "<br/>");
+    document.getElementById("messages").insertAdjacentHTML("afterbegin", message.timestamp + "<br/>");
 }
 </script>
 </body>

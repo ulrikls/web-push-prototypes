@@ -3,8 +3,10 @@
  */
 package delta.app;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.javalin.Javalin;
 import io.javalin.http.sse.SseClient;
+import io.javalin.json.JavalinJackson;
 import io.javalin.plugin.bundled.CorsPluginConfig;
 import io.javalin.websocket.WsContext;
 import org.eclipse.jetty.http.HttpHeader;
@@ -14,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.*;
 
@@ -30,7 +33,7 @@ public class App {
 
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
-    private final Queue<CompletableFuture<Long>> lpClients = new ConcurrentLinkedQueue<>();
+    private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
@@ -39,6 +42,9 @@ public class App {
         app = Javalin.create(config -> {
             config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
             config.staticFiles.add("/clients");
+            config.jsonMapper(new JavalinJackson().updateMapper(mapper -> {
+                mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+            }));
         });
 
         configureReturn();
@@ -60,7 +66,7 @@ public class App {
             var record = ctx.bodyAsClass(ReturnRecord.class);
 
             logReplies.add(new ReturnRecord(
-                    record.time(),
+                    record.timestamp(),
                     record.protocol(),
                     currentTime - record.nanoTime()));
         });
@@ -84,22 +90,28 @@ public class App {
     private void configureLongPolling() {
         app.post("/lp", ctx -> {
             ctx.header(HttpHeader.CACHE_CONTROL.toString(), HttpHeaderValue.NO_CACHE.toString());
-            CompletableFuture<Long> lpFuture = new CompletableFuture<>();
+            CompletableFuture<Message> lpFuture = new CompletableFuture<>();
             lpClients.add(lpFuture);
-            ctx.future(() -> lpFuture.thenAccept(response -> ctx.result(String.valueOf(response))));
+            ctx.future(() -> lpFuture.thenAccept(ctx::json));
         });
     }
 
 
     private void sendMessage() {
-        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(System.nanoTime())));
+        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(createMessage())));
 
-        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(System.nanoTime())));
+        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(createMessage())));
 
-        CompletableFuture<Long> lpFuture;
+        CompletableFuture<Message> lpFuture;
         while ((lpFuture = lpClients.poll()) != null) {
-            lpFuture.complete(System.nanoTime());
+            lpFuture.complete(createMessage());
         }
+    }
+
+    private Message createMessage() {
+        return new Message(
+                Instant.now(),
+                System.nanoTime());
     }
 
 
@@ -116,7 +128,7 @@ public class App {
 
     private String convertRecToLine(ReturnRecord logReply) {
         return String.join(";",
-                logReply.time().toString(),
+                logReply.timestamp().toString(),
                 logReply.protocol(),
                 logReply.nanoTime().toString()
         ) + System.lineSeparator();
