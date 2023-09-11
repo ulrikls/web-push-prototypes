@@ -38,9 +38,9 @@ public class App {
     private final Javalin app;
     private final ExecutorService executor = Executors.newWorkStealingPool();
 
+    private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
     private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
-    private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
@@ -60,9 +60,10 @@ public class App {
         });
 
         configureReturn();
+
+        configureLongPolling();
         configureServerSentEvents();
         configureWebsocket();
-        configureLongPolling();
     }
 
     private static String randomPayload(int payloadLength) {
@@ -90,6 +91,15 @@ public class App {
         });
     }
 
+    private void configureLongPolling() {
+        app.post("/lp", ctx -> {
+            ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
+            CompletableFuture<Message> lpFuture = new CompletableFuture<>();
+            lpClients.add(lpFuture);
+            ctx.future(() -> lpFuture.thenAccept(ctx::json));
+        });
+    }
+
     private void configureServerSentEvents() {
         app.sse("/sse", sseClient -> {
             sseClient.keepAlive();
@@ -105,25 +115,15 @@ public class App {
         });
     }
 
-    private void configureLongPolling() {
-        app.post("/lp", ctx -> {
-            ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
-            CompletableFuture<Message> lpFuture = new CompletableFuture<>();
-            lpClients.add(lpFuture);
-            ctx.future(() -> lpFuture.thenAccept(ctx::json));
-        });
-    }
-
-
     private void sendMessage() {
-        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(createMessage())));
-
-        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(createMessage())));
-
         CompletableFuture<Message> lpFuture;
         while ((lpFuture = lpClients.poll()) != null) {
             lpFuture.complete(createMessage());
         }
+
+        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(createMessage())));
+
+        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(createMessage())));
     }
 
     private Message createMessage() {
