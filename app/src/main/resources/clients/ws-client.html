@@ -11,12 +11,12 @@
 <script>
 function open() {
     let ws = new WebSocket("ws://" + window.location.host + "/ws");
-    ws.onmessage = msg => update(msg);
+    ws.onmessage = update;
     ws.onclose = () => window.setTimeout(open, 1000);
 }
 
-function update(msg) {
-    let message = JSON.parse(msg.data)
+function update(event) {
+    let message = JSON.parse(event.data)
     fetch("/return", {
         method: "POST",
         body: JSON.stringify({
