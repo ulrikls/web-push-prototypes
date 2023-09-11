@@ -10,10 +10,10 @@
 <div id="messages"></div>
 <script>
 let evtSource = new EventSource("/sse");
-evtSource.onmessage = msg => update(msg);
+evtSource.onmessage = update;
 
-function update(msg) {
-    let message = JSON.parse(msg.data)
+function update(event) {
+    let message = JSON.parse(event.data)
     fetch("/return", {
         method: "POST",
         body: JSON.stringify({
