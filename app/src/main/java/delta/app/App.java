@@ -49,7 +49,7 @@ public class App {
 
 
     public App(int payloadLength) {
-        csvFile = Path.of("LogReply-" + Instant.now() + "-" + payloadLength + ".csv");
+        csvFile = Path.of("LogReply-" + Instant.now().toString().replace(':', '.') + "-" + payloadLength + ".csv");
         payload = randomPayload(payloadLength);
 
         app = Javalin.create(config -> {
@@ -94,7 +94,7 @@ public class App {
     private void configureLongPolling() {
         app.post("/lp", ctx -> {
             ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
-            CompletableFuture<Message> lpFuture = new CompletableFuture<>();
+            var lpFuture = new CompletableFuture<Message>();
             lpClients.add(lpFuture);
             ctx.future(() -> lpFuture.thenAccept(ctx::json));
         });
