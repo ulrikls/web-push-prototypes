@@ -4,10 +4,8 @@
 package delta.app;
 
 import io.javalin.Javalin;
-import io.javalin.http.sse.SseClient;
 import io.javalin.json.JavalinJackson;
 import io.javalin.plugin.bundled.CorsPluginConfig;
-import io.javalin.websocket.WsContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +18,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Logger;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -42,9 +41,8 @@ public class App {
     private final Javalin app;
     private final Logger logger = Logger.getLogger(App.class.getName());
 
-    private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
-    private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
-    private final Queue<WsContext> wsClients = new ConcurrentLinkedQueue<>();
+    private final Random random = new Random();
+    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
@@ -81,8 +79,7 @@ public class App {
     public void start() {
         app.start(7070);
 
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendMessage, 0L, messageIntervalMs, MILLISECONDS);
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::writeLogReplyToCSV, 10L, 30L, SECONDS);
+        executor.scheduleAtFixedRate(this::writeLogReplyToCSV, 10L, 30L, SECONDS);
     }
 
     private void configureReturn() {
@@ -101,42 +98,39 @@ public class App {
         app.post("/lp", ctx -> {
             ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
             var lpFuture = new CompletableFuture<Message>();
-            lpClients.add(lpFuture);
             ctx.future(() -> lpFuture.thenAccept(ctx::json));
+            executor.schedule(
+                    () -> lpFuture.complete(createMessage()),
+                    Math.round(messageIntervalMs + random.nextGaussian() * 100),
+                    MILLISECONDS);
         });
     }
 
     private void configureServerSentEvents() {
         app.sse("/sse", sseClient -> {
             sseClient.keepAlive();
-            sseClient.onClose(() -> sseClients.remove(sseClient));
-            sseClients.add(sseClient);
+            executor.scheduleAtFixedRate(
+                    () -> {
+                        if (!sseClient.terminated()) {
+                            sseClient.sendEvent(createMessage());
+                        }
+                    },
+                    random.nextLong(0, messageIntervalMs),
+                    messageIntervalMs,
+                    MILLISECONDS);
         });
     }
 
     private void configureWebsocket() {
-        app.ws("/ws", ws -> {
-            ws.onConnect(wsClients::add);
-            ws.onClose(wsClients::remove);
-        });
-    }
-
-    private void sendMessage() {
-        var start = System.nanoTime();
-
-        CompletableFuture<Message> lpFuture;
-        while ((lpFuture = lpClients.poll()) != null) {
-            lpFuture.complete(createMessage());
-        }
-
-        sseClients.forEach(sseClient -> sseClient.sendEvent(createMessage()));
-
-        wsClients.forEach(wsClient -> wsClient.send(createMessage()));
-
-        var elapsed = (System.nanoTime() - start) / 1_000_000;
-        if (elapsed >= messageIntervalMs) {
-            logger.warning("Sending messages took " + elapsed + " ms, which is longer than the message interval of " + messageIntervalMs + " ms");
-        }
+        app.ws("/ws", ws -> ws.onConnect(wsClient -> executor.scheduleAtFixedRate(
+                () -> {
+                    if (wsClient.session.isOpen()) {
+                        wsClient.send(createMessage());
+                    }
+                },
+                random.nextLong(0, messageIntervalMs),
+                messageIntervalMs,
+                MILLISECONDS)));
     }
 
     private Message createMessage() {
