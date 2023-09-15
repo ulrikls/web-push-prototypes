@@ -20,12 +20,15 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static java.util.logging.Level.SEVERE;
 import static org.eclipse.jetty.http.HttpHeader.CACHE_CONTROL;
 import static org.eclipse.jetty.http.HttpHeaderValue.NO_CACHE;
 
@@ -37,6 +40,7 @@ public class App {
     }
 
     private final Javalin app;
+    private final Logger logger = Logger.getLogger(App.class.getName());
 
     private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
@@ -47,6 +51,7 @@ public class App {
     private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH.mm.ss").withZone(ZoneId.systemDefault());
     private final Path csvFile;
     private final String payload;
+    private final long messageIntervalMs = 1000;
 
 
     public App(int payloadLength) {
@@ -76,7 +81,7 @@ public class App {
     public void start() {
         app.start(7070);
 
-        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendMessage, 0L, 1L, SECONDS);
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::sendMessage, 0L, messageIntervalMs, MILLISECONDS);
         Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(this::writeLogReplyToCSV, 10L, 30L, SECONDS);
     }
 
@@ -117,6 +122,8 @@ public class App {
     }
 
     private void sendMessage() {
+        var start = System.nanoTime();
+
         CompletableFuture<Message> lpFuture;
         while ((lpFuture = lpClients.poll()) != null) {
             lpFuture.complete(createMessage());
@@ -125,6 +132,11 @@ public class App {
         sseClients.forEach(sseClient -> sseClient.sendEvent(createMessage()));
 
         wsClients.forEach(wsClient -> wsClient.send(createMessage()));
+
+        var elapsed = (System.nanoTime() - start) / 1_000_000;
+        if (elapsed >= messageIntervalMs) {
+            logger.warning("Sending messages took " + elapsed + " ms, which is longer than the message interval of " + messageIntervalMs + " ms");
+        }
     }
 
     private Message createMessage() {
@@ -142,7 +154,7 @@ public class App {
                 writer.write(convertRecToLine(logReply));
             }
         } catch (IOException e) {
-            throw new RuntimeException("Error writing latency to CSV file " + csvFile, e);
+            logger.log(SEVERE, "Error writing latency to CSV file " + csvFile, e);
         }
     }
 
