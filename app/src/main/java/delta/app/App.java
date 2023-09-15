@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +46,7 @@ public class App {
 
     private final Queue<ReturnRecord> logReplies = new ConcurrentLinkedQueue<>();
 
+    private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH.mm.ss").withZone(ZoneId.systemDefault());
     private final Path csvFile;
     private final String payload;
 
@@ -148,6 +151,7 @@ public class App {
     private String convertRecToLine(ReturnRecord logReply) {
         return String.join(";",
                 logReply.timestamp().toString(),
+                dateTimeFormatter.format(logReply.timestamp()),
                 logReply.protocol(),
                 logReply.nanoTime().toString()
         ) + System.lineSeparator();
