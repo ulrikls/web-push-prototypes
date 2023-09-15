@@ -19,7 +19,6 @@ import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS;
@@ -38,7 +37,6 @@ public class App {
     }
 
     private final Javalin app;
-    private final ExecutorService executor = Executors.newWorkStealingPool();
 
     private final Queue<CompletableFuture<Message>> lpClients = new ConcurrentLinkedQueue<>();
     private final Queue<SseClient> sseClients = new ConcurrentLinkedQueue<>();
@@ -124,9 +122,9 @@ public class App {
             lpFuture.complete(createMessage());
         }
 
-        sseClients.forEach(sseClient -> executor.execute(() -> sseClient.sendEvent(createMessage())));
+        sseClients.forEach(sseClient -> sseClient.sendEvent(createMessage()));
 
-        wsClients.forEach(wsClient -> executor.execute(() -> wsClient.send(createMessage())));
+        wsClients.forEach(wsClient -> wsClient.send(createMessage()));
     }
 
     private Message createMessage() {
