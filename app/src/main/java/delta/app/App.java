@@ -4,8 +4,10 @@
 package delta.app;
 
 import io.javalin.Javalin;
+import io.javalin.http.sse.SseClient;
 import io.javalin.json.JavalinJackson;
 import io.javalin.plugin.bundled.CorsPluginConfig;
+import io.javalin.websocket.WsConnectContext;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,7 +37,8 @@ public class App {
 
     public static void main(String[] args) {
         int payloadLength = (args.length > 0) ? Integer.parseInt(args[0]) : 0;
-        new App(payloadLength).start();
+        long messageIntervalMs = (args.length > 1) ? Long.parseLong(args[1]) : 1000L;
+        new App(payloadLength, messageIntervalMs).start();
     }
 
     private final Javalin app;
@@ -49,12 +52,13 @@ public class App {
     private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH.mm.ss").withZone(ZoneId.systemDefault());
     private final Path csvFile;
     private final String payload;
-    private final long messageIntervalMs = 1000;
+    private final long messageIntervalMs;
 
 
-    public App(int payloadLength) {
+    public App(int payloadLength, long messageIntervalMs) {
         csvFile = Path.of("LogReply-" + Instant.now().toString().replace(':', '.') + "-" + payloadLength + ".csv");
         payload = randomPayload(payloadLength);
+        this.messageIntervalMs = messageIntervalMs;
 
         app = Javalin.create(config -> {
             config.plugins.enableCors(cors -> cors.add(CorsPluginConfig::anyHost));
@@ -99,38 +103,41 @@ public class App {
             ctx.header(CACHE_CONTROL.toString(), NO_CACHE.toString());
             var lpFuture = new CompletableFuture<Message>();
             ctx.future(() -> lpFuture.thenAccept(ctx::json));
-            executor.schedule(
-                    () -> lpFuture.complete(createMessage()),
-                    Math.round(messageIntervalMs + random.nextGaussian() * 100),
-                    MILLISECONDS);
+            scheduleMessage(() -> lpFuture.complete(createMessage()));
         });
     }
 
     private void configureServerSentEvents() {
         app.sse("/sse", sseClient -> {
             sseClient.keepAlive();
-            executor.scheduleAtFixedRate(
-                    () -> {
-                        if (!sseClient.terminated()) {
-                            sseClient.sendEvent(createMessage());
-                        }
-                    },
-                    random.nextLong(0, messageIntervalMs),
-                    messageIntervalMs,
-                    MILLISECONDS);
+            scheduleMessage(() -> sendMessage(sseClient));
         });
     }
 
+    private void sendMessage(SseClient sseClient) {
+        if (!sseClient.terminated()) {
+            scheduleMessage(() -> sendMessage(sseClient));
+            sseClient.sendEvent(createMessage());
+        }
+    }
+
     private void configureWebsocket() {
-        app.ws("/ws", ws -> ws.onConnect(wsClient -> executor.scheduleAtFixedRate(
-                () -> {
-                    if (wsClient.session.isOpen()) {
-                        wsClient.send(createMessage());
-                    }
-                },
-                random.nextLong(0, messageIntervalMs),
-                messageIntervalMs,
-                MILLISECONDS)));
+        app.ws("/ws",
+                ws -> ws.onConnect(wsClient -> scheduleMessage(() -> sendMessage(wsClient))));
+    }
+
+    private void sendMessage(WsConnectContext wsClient) {
+        if (wsClient.session.isOpen()) {
+            scheduleMessage(() -> sendMessage(wsClient));
+            wsClient.send(createMessage());
+        }
+    }
+
+    private void scheduleMessage(Runnable messageSender) {
+        executor.schedule(
+                messageSender,
+                Math.round(messageIntervalMs + random.nextGaussian() * 100),
+                MILLISECONDS);
     }
 
     private Message createMessage() {
