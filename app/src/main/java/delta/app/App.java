@@ -116,20 +116,20 @@ public class App {
 
     private void sendMessage(SseClient sseClient) {
         if (!sseClient.terminated()) {
-            scheduleMessage(() -> sendMessage(sseClient));
             sseClient.sendEvent(createMessage());
+            scheduleMessage(() -> sendMessage(sseClient));
         }
     }
 
     private void configureWebsocket() {
-        app.ws("/ws",
-                ws -> ws.onConnect(wsClient -> scheduleMessage(() -> sendMessage(wsClient))));
+        app.ws("/ws", ws -> ws.onConnect(
+                wsClient -> scheduleMessage(() -> sendMessage(wsClient))));
     }
 
     private void sendMessage(WsConnectContext wsClient) {
         if (wsClient.session.isOpen()) {
-            scheduleMessage(() -> sendMessage(wsClient));
             wsClient.send(createMessage());
+            scheduleMessage(() -> sendMessage(wsClient));
         }
     }
 
