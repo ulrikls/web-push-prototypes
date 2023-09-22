@@ -10,7 +10,8 @@
 <div id="messages"></div>
 <script>
 function open() {
-    let ws = new WebSocket(`ws://${window.location.host}/ws`);
+    let protocol = ((window.location.protocol === "https:") ? "wss:" : "ws:")
+    let ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     ws.onmessage = update;
     ws.onclose = () => window.setTimeout(open, 1000);
 }
