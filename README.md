@@ -20,6 +20,7 @@ The server is implemented using [Javalin](https://javalin.io/).
 To run the server with default arguments:<br>
 `./gradlew run`
 
+The server listens to [localhost:7070](http://localhost:7070/)
 
 To provide arguments for the server, use:<br>
 `java -jar app/build/libs/app.jar <payload size> <message interval>`
@@ -31,7 +32,7 @@ The arguments are:
 * **Message interval**:
   Mean time interval between messages, in milliseconds.
   The interval follows a Gaussian distribution with a standard deviation of 100 ms.
-  Default is 1.000 ms.
+  Default is 1000 ms.
 
 
 ## Output
